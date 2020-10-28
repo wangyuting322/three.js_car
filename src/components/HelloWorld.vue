@@ -84,10 +84,35 @@ export default {
           }
         },
       ],
-      veinCanvas: null,
+      veinCanvas: null,//纹理的画布容器
+      texture: null,//纹理
+      axis: null,//坐标轴
       stopR: false,//停止动画旋转
-      texture: null,
+      isAndTouch: false,//是否支持移动端平移
+      touchInfo: {
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0
+      },//触摸移动
     }
+  },
+  computed: {
+    /**
+        * 判断是够是pc设备
+        */
+    isPC() {
+      const userAgentInfo = navigator.userAgent;
+      const Agents = ["Android", "iPhone", "SymbianOS", "Windows Phone", "iPod"];
+      let flag = true;
+      for (let v = 0; v < Agents.length; v++) {
+        if (userAgentInfo.indexOf(Agents[v]) > 0) {
+          flag = false;
+          break;
+        }
+      }
+      return flag;
+    },
   },
   methods: {
     /**
@@ -112,7 +137,7 @@ export default {
         // themodel为加载的模型实例
         this.theModel1 = gltf.scene;
         this.theModel1.position.set(0, -0.5, 0);
-        // Add the model to the scene 将模型加载到场景中
+        // this.theModel1.scale.set(1.5, 1.5, 1.5)
         this.scene.add(this.theModel1);
       }, undefined, function (error) {
         console.log(error, 'error')
@@ -122,25 +147,25 @@ export default {
      * 创建场景灯光
      */
     createLight() {
-      // 聚光源
+      // 平行光源（颜色，光强）
       var direction = new THREE.DirectionalLight(0xffffff, 0.54);
       direction.position.set(-8, 12, 8); //点光源位置
       direction.castShadow = true;
       direction.shadow.mapSize = new THREE.Vector2(1024, 1024);
       this.scene.add(direction); //点光源添加到场景中
 
-      // 底部点光源
+      // 底部点光源（颜色，强度，距离，衰减量）
       var pointBottom = new THREE.PointLight(0xffffff, 0.54);
       pointBottom.position.set(400, -400, 300); //点光源位置
       this.scene.add(pointBottom); //点光源添加到场景中
 
-      // 环境光
+      // 环境光（颜色，光强）
       //   var ambient = new THREE.AmbientLight(parseInt('#919191'.substring(1), 16));
       //   this.scene.add(ambient);
 
+      // 半球光光源
       var hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.61);
       hemiLight.position.set(0, 50, 0);
-      // Add hemisphere light to scene   
       this.scene.add(hemiLight);
     },
     /**
@@ -159,7 +184,7 @@ export default {
       //   this.camera.lookAt(this.scene.position); //设置相机方向(指向的场景对象)
 
       this.camera = new THREE.PerspectiveCamera(45, k, 0.1, 100);
-      this.camera.position.set(0, 0, 3); //设置相机位置
+      this.camera.position.set(0, 0, 2); //设置相机位置
     },
     /**
      * 创建渲染器
@@ -210,7 +235,10 @@ export default {
       //     this.texture.offset.y -= 0.06
       //   }
       requestAnimationFrame(this.animate);
-      this.controls.update();//配合控制器属性使用
+      //   if (!this.isMove) {
+      //     //   控制器更新
+      //     this.controls.update();//配合控制器属性使用
+      //   }
     },
     /**
     * 创建高光材质
@@ -219,7 +247,7 @@ export default {
       let material = null;
       material = new THREE.MeshPhongMaterial({
         color: (!vein) ? parseInt(color.substring(1), 16) : null,// 颜色转16进制
-        specular: (light === 'light' & !vein) ? 0x4488ee : null,//高光部分颜色
+        specular: (light === 'light' && !vein) ? 0x4488ee : null,//高光部分颜色
         shininess: 10,//反光度
         map: vein ? vein : null,
       });
@@ -378,6 +406,50 @@ export default {
         })
       })
     },
+    /**
+     *  控制移动
+     */
+    handleMove(x, y, z) {
+      {/**方法一:以模型中心为坐标中心移动 */ }
+      //   this.axis = new THREE.Vector3(x, y, z);
+      //   this.theModel1.translateOnAxis(this.axis, 1);
+
+      {/**方法二:以模型中心为坐标中心移动 */ }
+      //   this.axis = new THREE.Vector3(x, y, z);
+      //   this.theModel1.translateX(x);
+      //   this.theModel1.translateY(y);
+
+      {/**方法三: 以世界坐标轴为中心移动 */ }
+      //   this.theModel1.position.set(this.theModel1.position.x + x, this.theModel1.position.y, this.theModel1.position.z)
+
+      {/**方法四: 移动相机镜头 */ }
+      this.camera.position.set(this.camera.position.x - x, this.camera.position.y - y, this.camera.position.z - z)
+    },
+    // 获取触摸开始事件手指位置
+    handleTouchStart(e) {
+      const touch = e.targetTouches[0];
+      //   console.log(touch, 'start');
+      this.touchInfo.startX = touch.pageX
+      this.touchInfo.startY = touch.pageY
+    },
+    // 获取触摸结束事件的手指位置
+    handleTouchMove(e) {
+      e.preventDefault();
+      const touch = e.targetTouches[0];
+      //   console.log(touch, 'move');
+      this.touchInfo.endX = touch.pageX
+      this.touchInfo.endY = touch.pageY
+      //   console.log(this.touchInfo, 'info');
+      this.handleTouch();
+    },
+    handleTouch() {
+      const { startX, startY, endX, endY } = { ...this.touchInfo }
+      const distanceX = endX - startX;
+      const distanceY = endY - startY;
+      //   if (Math.abs(distanceX) > document.documentElement.clientWidth * 0.1 && Math.abs(distanceY) > document.documentElement.clientHeight * 0.1) {
+      this.handleMove(distanceX * 0.0005, -distanceY * 0.0005, 0)
+      //   }
+    }
   },
   mounted() {
 
@@ -394,8 +466,8 @@ export default {
     this.createCamera()
 
     // 辅助坐标轴
-    let axisHelper = new THREE.AxisHelper(250);
-    this.scene.add(axisHelper);
+    let axesHelper = new THREE.AxesHelper(250);
+    this.scene.add(axesHelper);
 
     // 新增光源
     this.createLight();
@@ -422,23 +494,27 @@ export default {
         <div class="simple-spinner"></div>
       </div>
       <div class="title">堂胜工贸</div>
-      <div class="canvas">
+      <div class="canvas" >
+        <div class='canvas-cover'
+          onTouchstart={this.handleTouchStart}
+          onTouchmove={this.handleTouchMove}
+          style={`display:${this.isAndTouch ? 'block' : 'none'}`}></div>
       </div>
-      <div>
-        预览控制：
-      <button class='float' onClick={() => { this.handlePreviews('light') }}>高光</button>
-        <button class='float' onClick={() => { this.handlePreviews('dark') }}>暗沉</button>
-        <button class='float' onClick={() => { this.stopR = !this.stopR }}>停止/旋转</button>
-        <button onClick={() => { this.controls.reset(); this.theModel1.position.set(0, -0.5, 0); }}>重置位置</button>
-        {/**
-        
-        <button onClick={() => { this.theModel1.translateY(0.1) }}>上移</button>
-        <button onClick={() => { this.theModel1.translateY(-0.1) }}>下移</button>
-        <button onClick={() => { this.theModel1.translateX(0.1) }}>左移</button>
-        <button onClick={() => { this.theModel1.translateX(-0.1) }}>右移</button>
-        
-        */}
-        <div>
+      <div class="sub-title"> 预览控制：</div>
+      <div class="preview">
+        <div class='preview-item' onClick={() => { this.handlePreviews('light') }}>高光</div>
+        <div class='preview-item' onClick={() => { this.handlePreviews('dark') }}>暗沉</div>
+        <div class='preview-item' onClick={() => { this.stopR = !this.stopR }}>{this.stopR ? '开启自动旋转' : '关闭自动旋转'}</div>
+        <div class='preview-item' onClick={() => { this.controls.reset(); this.camera.position.set(0, 0, 2); }}>重置位置</div>
+
+        <div class='preview-item' onClick={() => { this.handleMove(0, 0.1, 0) }} v-show={!this.isPC}>上移</div>
+        <div class='preview-item' onClick={() => { this.handleMove(0, -0.1, 0) }} v-show={!this.isPC}>下移</div>
+        <div class='preview-item' onClick={() => { this.handleMove(-0.1, 0, 0) }} v-show={!this.isPC}>左移</div>
+        <div class='preview-item' onClick={() => { this.handleMove(0.1, 0, 0) }} v-show={!this.isPC}>右移</div>
+
+        <div class='preview-item' onClick={() => { this.isAndTouch = !this.isAndTouch }} v-show={!this.isPC}>{this.isAndTouch ? '关闭移动端平移' : "开启移动端平移"}</div>
+
+        <div style='display:none;'>
           <canvas class='veinCanvas' width="5" height="5"></canvas>
         </div>
       </div>
@@ -512,6 +588,14 @@ export default {
   height: 50vh;
   width: 50vw;
   margin: auto;
+  position: relative;
+}
+.canvas-cover {
+  height: 50vh;
+  width: 50vw;
+  margin: auto;
+  position: absolute;
+  border: 1px black solid;
 }
 @keyframes rotate {
   0% {
@@ -536,6 +620,7 @@ export default {
   padding: 5px;
   font-size: 16px;
 }
+.preview,
 .color,
 .vein {
   width: 100%;
@@ -562,8 +647,11 @@ export default {
   align-items: center;
   padding: 0 5px;
 }
+.preview-item,
 .header-item {
-  width: 80px;
+  /* width: 80px; */
+  margin-top: 2px;
+  padding: 0 10px;
   display: flex;
   height: 40px;
   align-items: center;
@@ -571,6 +659,7 @@ export default {
   background-color: #13c2c2;
   justify-content: center;
   color: white;
+  cursor: pointer;
 }
 .active {
   border: 2px solid #eb2f96;
